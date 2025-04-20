@@ -2,7 +2,7 @@ plugins {
     java
     idea
     id("com.github.johnrengelman.shadow") version "7.1.2"
-    id("net.minecraftforge.gradle") version "5.1.+"
+    id("net.minecraftforge.gradle") version "6.0.35"
     id("org.spongepowered.mixin") version "0.7-SNAPSHOT"
     id("org.parchmentmc.librarian.forgegradle") version "1.+"
 }
@@ -35,7 +35,7 @@ repositories {
             filter(filter)
         }
 
-    exclusiveMaven("https://alcatrazescapee.jfrog.io/artifactory/mods") { includeGroup("com.alcatrazescapee") }
+    exclusiveMaven("https://alcatrazescapee.com/maven") { includeGroup("com.alcatrazescapee") }
     exclusiveMaven("https://maven.parchmentmc.org") { includeGroupByRegex("org\\.parchmentmc.*") }
 }
 
