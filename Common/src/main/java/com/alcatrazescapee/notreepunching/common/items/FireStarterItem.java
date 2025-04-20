@@ -25,6 +25,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
@@ -54,82 +55,85 @@ public class FireStarterItem extends TieredItem
     @Override
     public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity entity)
     {
-        if (entity instanceof Player player)
+        if (level.isClientSide || !(entity instanceof Player player))
         {
-            BlockHitResult result = getPlayerPOVHitResult(level, player, ClipContext.Fluid.NONE);
+            return stack;
+        }
+        BlockHitResult result = getPlayerPOVHitResult(level, player, ClipContext.Fluid.NONE);
 
-            if (result.getType() == HitResult.Type.BLOCK)
+        if (result.getType() != HitResult.Type.BLOCK)
+        {
+            return stack;
+        }
+        // If looking at a block
+        BlockPos pos = result.getBlockPos();
+        BlockState stateAt = level.getBlockState(pos);
+        if (CampfireBlock.canLight(stateAt))
+        {
+            // Light campfire
+            level.playSound(player, pos, SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.4F + 0.8F);
+            level.setBlock(pos, stateAt.setValue(BlockStateProperties.LIT, true), 11);
+            return Helpers.hurtAndBreak(player, player.getUsedItemHand(), stack, 1);
+        }
+        BlockPos campfirePos = stateAt.canBeReplaced() ? pos : pos.relative(result.getDirection());
+        if (level.getBlockState(campfirePos).canBeReplaced())
+        {
+            // try to make a fire pit
+            List<ItemEntity> entities = level.getEntitiesOfClass(ItemEntity.class, new AABB(campfirePos, pos.offset(1, 2, 1)));
+            List<ItemEntity> logEntities = new ArrayList<>(), kindlingEntities = new ArrayList<>(), soulFireEntities = new ArrayList<>();
+
+            // Require 1 log, 3 kindling
+            int logs = 0, kindling = 0, soulFire = 0;
+
+            for (ItemEntity drop : entities)
             {
-                // If looking at a block
-                BlockPos pos = result.getBlockPos();
-                if (!level.isClientSide)
+                ItemStack dropStack = drop.getItem();
+                if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_LOGS))
                 {
-                    stack = Helpers.hurtAndBreak(player, player.getUsedItemHand(), stack, 1);
-
-                    BlockState stateAt = level.getBlockState(pos);
-                    if (CampfireBlock.canLight(stateAt))
-                    {
-                        // Light campfire
-                        level.playSound(player, pos, SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.4F + 0.8F);
-                        level.setBlock(pos, stateAt.setValue(BlockStateProperties.LIT, true), 11);
-                    }
-                    else
-                    {
-                        List<ItemEntity> entities = level.getEntitiesOfClass(ItemEntity.class, new AABB(pos.above(), pos.offset(1, 2, 1)));
-                        List<ItemEntity> logEntities = new ArrayList<>(), kindlingEntities = new ArrayList<>(), soulFireEntities = new ArrayList<>();
-
-                        // Require 1 log, 3 kindling
-                        int logs = 0, kindling = 0, soulFire = 0;
-
-                        for (ItemEntity drop : entities)
-                        {
-                            ItemStack dropStack = drop.getItem();
-                            if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_LOGS))
-                            {
-                                logs += dropStack.getCount();
-                                logEntities.add(drop);
-                            }
-                            else if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_KINDLING))
-                            {
-                                kindling += dropStack.getCount();
-                                kindlingEntities.add(drop);
-                            }
-                            else if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_SOUL_FIRE_CATALYST))
-                            {
-                                soulFire += dropStack.getCount();
-                                soulFireEntities.add(drop);
-                            }
-                        }
-                        final boolean canMakeCampfire = Config.INSTANCE.fireStarterCanMakeCampfire.getAsBoolean();
-                        final boolean canMakeSoulCampfire = Config.INSTANCE.fireStarterCanMakeSoulCampfire.getAsBoolean() && soulFire >= 1;
-                        if (logs >= 1 && kindling >= 3 && (canMakeCampfire || canMakeSoulCampfire))
-                        {
-                            removeItems(logEntities, 1);
-                            removeItems(kindlingEntities, 3);
-
-                            Block resultBlock = Blocks.CAMPFIRE;
-                            if (canMakeSoulCampfire)
-                            {
-                                resultBlock = Blocks.SOUL_CAMPFIRE;
-                                removeItems(soulFireEntities, 1);
-                            }
-
-                            BlockPlaceContext context = new BlockPlaceContext(player, player.getUsedItemHand(), stack, result);
-                            BlockState resultBlockState = resultBlock.getStateForPlacement(context);
-                            if (resultBlockState != null) {
-                                level.setBlockAndUpdate(pos.above(), resultBlockState.setValue(CampfireBlock.LIT, true));
-                            }
-                        }
-                        else
-                        {
-                            // No fire pit to make, try light a fire
-                            if (level.getRandom().nextFloat() < Config.INSTANCE.fireStarterFireStartChance.getAsFloat())
-                            {
-                                level.setBlockAndUpdate(pos.above(), Blocks.FIRE.defaultBlockState());
-                            }
-                        }
-                    }
+                    logs += dropStack.getCount();
+                    logEntities.add(drop);
                 }
+                else if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_KINDLING))
+                {
+                    kindling += dropStack.getCount();
+                    kindlingEntities.add(drop);
+                }
+                else if (Helpers.isItem(dropStack.getItem(), ModTags.Items.FIRE_STARTER_SOUL_FIRE_CATALYST))
+                {
+                    soulFire += dropStack.getCount();
+                    soulFireEntities.add(drop);
+                }
+            }
+            final boolean canMakeCampfire = Config.INSTANCE.fireStarterCanMakeCampfire.getAsBoolean();
+            final boolean canMakeSoulCampfire = Config.INSTANCE.fireStarterCanMakeSoulCampfire.getAsBoolean() && soulFire >= 1;
+            if (logs >= 1 && kindling >= 3 && (canMakeCampfire || canMakeSoulCampfire))
+            {
+                removeItems(logEntities, 1);
+                removeItems(kindlingEntities, 3);
+
+                Block resultBlock = Blocks.CAMPFIRE;
+                if (canMakeSoulCampfire)
+                {
+                    resultBlock = Blocks.SOUL_CAMPFIRE;
+                    removeItems(soulFireEntities, 1);
+                }
+
+                BlockPlaceContext context = new BlockPlaceContext(player, player.getUsedItemHand(), stack, result);
+                BlockState resultBlockState = resultBlock.getStateForPlacement(context);
+                if (resultBlockState != null) {
+                    level.setBlockAndUpdate(campfirePos, resultBlockState.setValue(CampfireBlock.LIT, true));
+                    return Helpers.hurtAndBreak(player, player.getUsedItemHand(), stack, 1);
+                }
+            }
+        }
+        BlockPos firePos = FireBlock.canBePlacedAt(level, pos, result.getDirection()) ? pos : pos.relative(result.getDirection());
+        if (FireBlock.canBePlacedAt(level, firePos, result.getDirection()))
+        {
+            // No fire pit to make, try light a fire
+            if (level.getRandom().nextFloat() < Config.INSTANCE.fireStarterFireStartChance.getAsFloat())
+            {
+                level.setBlockAndUpdate(firePos, Blocks.FIRE.defaultBlockState());
+                return Helpers.hurtAndBreak(player, player.getUsedItemHand(), stack, 1);
             }
         }
         return stack;
