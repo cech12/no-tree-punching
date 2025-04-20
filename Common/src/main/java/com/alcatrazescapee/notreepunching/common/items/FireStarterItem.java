@@ -17,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.Tiers;
 import net.minecraft.world.item.UseAnim;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
 import net.minecraft.world.level.ClipContext;
@@ -113,7 +114,11 @@ public class FireStarterItem extends TieredItem
                                 removeItems(soulFireEntities, 1);
                             }
 
-                            level.setBlockAndUpdate(pos.above(), resultBlock.defaultBlockState().setValue(CampfireBlock.LIT, true));
+                            BlockPlaceContext context = new BlockPlaceContext(player, player.getUsedItemHand(), stack, result);
+                            BlockState resultBlockState = resultBlock.getStateForPlacement(context);
+                            if (resultBlockState != null) {
+                                level.setBlockAndUpdate(pos.above(), resultBlockState.setValue(CampfireBlock.LIT, true));
+                            }
                         }
                         else
                         {
