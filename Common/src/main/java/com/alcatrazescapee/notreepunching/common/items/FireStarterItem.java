@@ -108,19 +108,20 @@ public class FireStarterItem extends TieredItem
             final boolean canMakeSoulCampfire = Config.INSTANCE.fireStarterCanMakeSoulCampfire.getAsBoolean() && soulFire >= 1;
             if (logs >= 1 && kindling >= 3 && (canMakeCampfire || canMakeSoulCampfire))
             {
-                removeItems(logEntities, 1);
-                removeItems(kindlingEntities, 3);
-
                 Block resultBlock = Blocks.CAMPFIRE;
                 if (canMakeSoulCampfire)
                 {
                     resultBlock = Blocks.SOUL_CAMPFIRE;
-                    removeItems(soulFireEntities, 1);
                 }
 
                 BlockPlaceContext context = new BlockPlaceContext(player, player.getUsedItemHand(), stack, result);
                 BlockState resultBlockState = resultBlock.getStateForPlacement(context);
-                if (resultBlockState != null) {
+                if (resultBlockState != null && !resultBlockState.getValue(BlockStateProperties.WATERLOGGED)) {
+                    removeItems(logEntities, 1);
+                    removeItems(kindlingEntities, 3);
+                    if (canMakeSoulCampfire) {
+                        removeItems(soulFireEntities, 1);
+                    }
                     level.setBlockAndUpdate(campfirePos, resultBlockState.setValue(CampfireBlock.LIT, true));
                     return Helpers.hurtAndBreak(player, player.getUsedItemHand(), stack, 1);
                 }
